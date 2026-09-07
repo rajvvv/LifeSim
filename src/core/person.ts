@@ -1,11 +1,17 @@
 import type { Person, Sex, WorldState } from "./types";
 import { nextEntityId } from "./world";
+import { MINUTES_PER_YEAR } from "./time";
+import { lifeStageForAge } from "./lifecycle";
 
 export interface CreateNewbornInput {
   firstName: string;
   lastName: string;
   sex: Sex;
   birthCountry: string;
+}
+
+export interface CreatePersonAtAgeInput extends CreateNewbornInput {
+  age: number;
 }
 
 export function createNewborn(
@@ -56,8 +62,30 @@ export function createNewborn(
       financialLiteracy: 5,
     },
     timeline: [],
+    relationships: [],
+    familyRefs: {
+      parentIds: [],
+      childIds: [],
+      siblingIds: [],
+      spouseIds: [],
+    },
   };
 
   world.people[id] = person;
+  return person;
+}
+
+export function createPersonAtAge(
+  world: WorldState,
+  input: CreatePersonAtAgeInput
+): Person {
+  const person = createNewborn(world, input);
+
+  person.identity.birthDate =
+    world.worldTime - input.age * MINUTES_PER_YEAR;
+
+  person.lifecycle.ageYears = input.age;
+  person.lifecycle.stage = lifeStageForAge(input.age);
+
   return person;
 }

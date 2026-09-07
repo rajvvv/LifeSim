@@ -5,7 +5,7 @@ export function saveWorld(world: WorldState): string {
 }
 
 export function loadWorld(json: string): WorldState {
-  const parsed = JSON.parse(json) as WorldState;
+  const parsed = JSON.parse(json) as any;
 
   if (!parsed.schemaVersion) {
     throw new Error("Invalid save file: missing schemaVersion.");
@@ -19,5 +19,36 @@ export function loadWorld(json: string): WorldState {
     throw new Error("Invalid save file: missing counters.");
   }
 
-  return parsed;
+  if (!parsed.relationships) {
+    parsed.relationships = {};
+  }
+
+  if (!parsed.families) {
+    parsed.families = {};
+  }
+
+  if (!parsed.households) {
+    parsed.households = {};
+  }
+
+  for (const person of Object.values(parsed.people)) {
+    const p = person as any;
+
+    if (!p.relationships) {
+      p.relationships = [];
+    }
+
+    if (!p.familyRefs) {
+      p.familyRefs = {
+        parentIds: [],
+        childIds: [],
+        siblingIds: [],
+        spouseIds: [],
+      };
+    }
+  }
+
+  parsed.schemaVersion = "0.2.0";
+
+  return parsed as WorldState;
 }

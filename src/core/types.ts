@@ -1,6 +1,9 @@
 export type EntityId = string;
 export type PersonId = string;
 export type EventId = string;
+export type RelationshipId = string;
+export type FamilyId = string;
+export type HouseholdId = string;
 
 export type Sex = "female" | "male" | "intersex";
 
@@ -12,6 +15,63 @@ export type LifeStage =
   | "adult"
   | "middle_age"
   | "senior";
+
+export type RelationshipType =
+  | "parent_child"
+  | "sibling"
+  | "spouse"
+  | "friend"
+  | "acquaintance"
+  | "coworker"
+  | "rival";
+
+export type RelationshipStatus =
+  | "active"
+  | "strained"
+  | "dormant"
+  | "ended";
+
+export interface RelationshipAxes {
+  trust: number;
+  affection: number;
+  respect: number;
+  conflict: number;
+  resentment: number;
+  dependence: number;
+  attraction: number;
+  loyalty: number;
+  compatibility: number;
+}
+
+export interface RelationshipEdge {
+  id: RelationshipId;
+  personA: PersonId;
+  personB: PersonId;
+  type: RelationshipType;
+  status: RelationshipStatus;
+  startedAt: number;
+  axes: RelationshipAxes;
+}
+
+export interface FamilyRefs {
+  parentIds: PersonId[];
+  childIds: PersonId[];
+  siblingIds: PersonId[];
+  spouseIds: PersonId[];
+}
+
+export interface Family {
+  id: FamilyId;
+  name: string;
+  memberIds: PersonId[];
+  createdAt: number;
+}
+
+export interface Household {
+  id: HouseholdId;
+  memberIds: PersonId[];
+  createdAt: number;
+}
 
 export interface PersonIdentity {
   firstName: string;
@@ -74,16 +134,25 @@ export interface Person {
   personality: PersonalityProfile;
   skills: SkillSet;
   timeline: TimelineEntry[];
+
+  relationships: RelationshipId[];
+  familyRefs: FamilyRefs;
+  familyId?: FamilyId;
+  householdId?: HouseholdId;
 }
 
 export type SimEventType =
   | "WorldCreated"
   | "PersonBorn"
+  | "PersonCreated"
   | "PersonAged"
   | "LifeStageChanged"
   | "StartedSchool"
   | "EnteredAdulthood"
   | "PersonDied"
+  | "RelationshipCreated"
+  | "FamilyCreated"
+  | "HouseholdCreated"
   | "ScheduledEvent";
 
 export interface SimEvent {
@@ -115,6 +184,9 @@ export interface WorldState {
   seed: string;
   worldTime: number;
   people: Record<PersonId, Person>;
+  relationships: Record<RelationshipId, RelationshipEdge>;
+  families: Record<FamilyId, Family>;
+  households: Record<HouseholdId, Household>;
   scheduledEvents: ScheduledEvent[];
   eventLog: SimEvent[];
   counters: WorldCounters;

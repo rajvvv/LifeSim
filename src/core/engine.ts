@@ -1,13 +1,42 @@
-import type { Person, ScheduledEvent, WorldState } from "./types";
-import { createNewborn, type CreateNewbornInput } from "./person";
+import type {
+  Family,
+  Person,
+  PersonId,
+  ScheduledEvent,
+  WorldState,
+} from "./types";
+
+import {
+  createNewborn,
+  createPersonAtAge,
+  type CreateNewbornInput,
+  type CreatePersonAtAgeInput,
+} from "./person";
+
 import { addTimeline, emitEvent } from "./world";
 import { addYears, ageInYears } from "./time";
 import { annualDeathProbability, lifeStageForAge } from "./lifecycle";
 import { Rng } from "./rng";
 
+import {
+  createParentChild,
+  createSibling,
+} from "./relationships";
+
+import {
+  addPersonToFamily,
+  addPersonToHousehold,
+  createFamily,
+  createHousehold,
+} from "./family";
+
 export { createWorld } from "./world";
 
-export interface CreatePersonAtBirthInput extends CreateNewbornInput {}
+export interface CreatePersonAtBirthInput extends CreateNewbornInput {
+  parentIds?: PersonId[];
+}
+
+export interface CreateAdultInput extends CreatePersonAtAgeInput {}
 
 export function createPersonAtBirth(
   world: WorldState,
@@ -25,6 +54,7 @@ export function createPersonAtBirth(
       lastName: person.identity.lastName,
       sex: person.identity.sex,
       country: person.identity.birthCountry,
+      parentIds: input.parentIds ?? [],
     },
     causes: [],
   });
@@ -36,7 +66,99 @@ export function createPersonAtBirth(
     `${person.identity.firstName} ${person.identity.lastName} was born.`
   );
 
+  if (input.parentIds && input.parentIds.length > 0) {
+    setupFamilyForNewborn(world, person, input.parentIds);
+  }
+
   return person;
+}
+
+export function createAdult(
+  world: WorldState,
+  input: CreateAdultInput
+): Person {
+  const person = createPersonAtAge(world, input);
+
+  const event = emitEvent(world, {
+    type: "PersonCreated",
+    worldTime: world.worldTime,
+    actorIds: [person.id],
+    targetIds: [person.id],
+    payload: {
+      firstName: person.identity.firstName,
+      lastName: person.identity.lastName,
+      sex: person.identity.sex,
+      age: input.age,
+      country: person.identity.birthCountry,
+    },
+    causes: [],
+  });
+
+  addTimeline(
+    person,
+    event,
+    "Entered simulation",
+    `${person.identity.firstName} ${person.identity.lastName} entered the simulation at age ${input.age}.`
+  );
+
+  return person;
+}
+
+function setupFamilyForNewborn(
+  world: WorldState,
+  person: Person,
+  parentIds: PersonId[]
+): void {
+  const parentPeople = parentIds
+    .map((parentId) => world.people[parentId])
+    .filter((parent): parent is Person => Boolean(parent));
+
+  const siblingIds = new Set<PersonId>();
+
+  for (const parent of parentPeople) {
+    for (const childId of parent.familyRefs.childIds) {
+      if (childId !== person.id) {
+        siblingIds.add(childId);
+      }
+    }
+  }
+
+  for (const parent of parentPeople) {
+    createParentChild(world, parent, person);
+  }
+
+  for (const siblingId of siblingIds) {
+    const sibling = world.people[siblingId];
+
+    if (sibling) {
+      createSibling(world, sibling, person);
+    }
+  }
+
+  const firstParent = parentPeople[0];
+
+  let family: Family | undefined = firstParent?.familyId
+    ? world.families[firstParent.familyId]
+    : undefined;
+
+  if (!family) {
+    family = createFamily(world, person.identity.lastName, [
+      ...parentPeople.map((parent) => parent.id),
+      person.id,
+    ]);
+  } else {
+    addPersonToFamily(world, person, family);
+  }
+
+  let household = firstParent?.householdId
+    ? world.households[firstParent.householdId]
+    : undefined;
+
+  if (!household) {
+    createHousehold(world, family.memberIds);
+  } else {
+    addPersonToHousehold(world, person, household);
+  }
 }
 
 export function killPerson(
@@ -126,6 +248,29 @@ export function advanceYears(world: WorldState, years: number): void {
       const age = ageInYears(world.worldTime, person.identity.birthDate);
 
       person.lifecycle.ageYears = age;
+
+      const healthRng = new Rng(
+        `${world.seed}:health:${person.id}:${world.worldTime}`
+      );
+
+      let healthDecline = 0;
+
+      if (age >= 40 && age < 60) {
+        healthDecline = healthRng.int(0, 1);
+      } else if (age >= 60 && age < 75) {
+        healthDecline = healthRng.int(0, 2);
+      } else if (age >= 75 && age < 85) {
+        healthDecline = healthRng.int(1, 3);
+      } else if (age >= 85) {
+        healthDecline = healthRng.int(2, 4);
+      }
+
+      if (healthDecline > 0) {
+        person.attributes.health = Math.max(
+          0,
+          person.attributes.health - healthDecline
+        );
+      }
 
       const ageEvent = emitEvent(world, {
         type: "PersonAged",

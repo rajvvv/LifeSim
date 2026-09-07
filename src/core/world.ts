@@ -8,10 +8,13 @@ import type {
 
 export function createWorld(seed: string): WorldState {
   return {
-    schemaVersion: "0.1.0",
+    schemaVersion: "0.2.0",
     seed,
     worldTime: 0,
     people: {},
+    relationships: {},
+    families: {},
+    households: {},
     scheduledEvents: [],
     eventLog: [],
     counters: {
